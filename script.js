@@ -3073,9 +3073,15 @@ bindPhase4AEvents();
 const SUPABASE_URL = "https://vskygcjkkwjcidpxzega.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_oN2DPPNKJqlkvBkjUMHyqA_W4FfaJE7";
 
+/*
+  Bug fix: the previous check compared SUPABASE_URL/KEY against a
+  "placeholder" string that was identical to the real values above,
+  so the condition was always false and supabaseClient was always null
+  — meaning login, signup and saving never actually worked.
+  Now we just verify the values are present and non-empty.
+*/
 const supabaseClient =
-    SUPABASE_URL !== "https://vskygcjkkwjcidpxzega.supabase.co" &&
-    SUPABASE_PUBLISHABLE_KEY !== "sb_publishable_oN2DPPNKJqlkvBkjUMHyqA_W4FfaJE7"
+    SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && typeof window.supabase !== "undefined"
         ? window.supabase.createClient(
             SUPABASE_URL,
             SUPABASE_PUBLISHABLE_KEY
