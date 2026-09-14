@@ -12,6 +12,7 @@
     >
 
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -32,16 +33,34 @@
                 <a href="#pressure">Interview Pressure</a>
                 <a href="#voice">Voice Practice</a>
                 <a href="#progress">My Progress</a>
+                <a href="#history">History</a>
             </nav>
 
-            <button
-                class="mobile-menu-btn"
-                id="mobileMenuBtn"
-                aria-label="Open navigation menu"
-                aria-expanded="false"
-            >
-                ☰
-            </button>
+            <div class="header-actions">
+                <div id="authGuestActions" class="auth-header-actions">
+                    <a class="header-auth-link" href="#login">Log in</a>
+                    <a class="btn btn-primary btn-small" href="#signup">Create account</a>
+                </div>
+
+                <div id="authUserActions" class="auth-header-actions hidden">
+                    <a href="#profile" class="user-chip" aria-label="Open profile">
+                        <img id="headerAvatar" class="avatar avatar-small" src="" alt="">
+                        <span id="headerUserName">Account</span>
+                    </a>
+                    <button class="btn btn-secondary btn-small" id="logoutBtn" type="button">
+                        Log out
+                    </button>
+                </div>
+
+                <button
+                    class="mobile-menu-btn"
+                    id="mobileMenuBtn"
+                    aria-label="Open navigation menu"
+                    aria-expanded="false"
+                >
+                    ☰
+                </button>
+            </div>
         </div>
     </header>
 
@@ -215,6 +234,24 @@
 
             </section>
 
+
+            <!-- RECENT INTERVIEW HISTORY -->
+            <section class="container dashboard-history-section">
+
+                <div class="section-heading history-heading-row">
+                    <div>
+                        <span class="eyebrow">YOUR ACTIVITY</span>
+                        <h2>Recent interview sessions</h2>
+                        <p>Your latest practice sessions are saved to your account.</p>
+                    </div>
+                    <a class="btn btn-secondary btn-small" href="#history">View full history</a>
+                </div>
+
+                <div id="recentSessionsList" class="session-list">
+                    <div class="session-empty">Log in and complete an interview to build your history.</div>
+                </div>
+
+            </section>
 
             <!-- QUICK STATS -->
             <section class="container quick-stats">
@@ -758,6 +795,42 @@
 
 
         <!-- =========================
+             INTERVIEW HISTORY PAGE
+        ========================== -->
+        <section id="historyPage" class="page">
+            <div class="container page-container">
+                <button class="back-btn" data-route="home">← Back to Dashboard</button>
+
+                <div class="page-title history-title-row">
+                    <div>
+                        <span class="eyebrow">YOUR ACTIVITY</span>
+                        <h1>Interview History</h1>
+                        <p>Review completed interview sessions and the answers you gave.</p>
+                    </div>
+                    <button class="btn btn-secondary btn-small" id="refreshHistoryBtn" type="button">Refresh</button>
+                </div>
+
+                <div id="historyMessage" class="history-message hidden" role="status"></div>
+
+                <div class="history-layout">
+                    <div>
+                        <div id="historyList" class="session-list history-list">
+                            <div class="session-empty">Loading your interview history...</div>
+                        </div>
+                    </div>
+
+                    <aside id="historyDetails" class="history-details-card">
+                        <div class="history-details-empty">
+                            <span class="feature-icon blue">↗</span>
+                            <h2>Select a session</h2>
+                            <p>Choose an interview from your history to review its questions, answers and confidence ratings.</p>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================
              SESSION SUMMARY PAGE
         ========================== -->
         <section id="summaryPage" class="page">
@@ -853,6 +926,350 @@
 
             </div>
 
+        </section>
+
+
+        <!-- =========================
+             AUTHENTICATION PAGES
+        ========================== -->
+
+        <section id="loginPage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card">
+                    <div class="auth-brand-mark">✓</div>
+                    <span class="eyebrow">WELCOME BACK</span>
+                    <h1>Log in to InterviewPrep</h1>
+                    <p class="auth-subtitle">Continue your interview practice and keep your progress connected to your account.</p>
+
+                    <div id="loginMessage" class="auth-message hidden" role="alert"></div>
+
+                    <form id="loginForm" class="auth-form" novalidate>
+                        <label for="loginEmail">Email address</label>
+                        <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+
+                        <label for="loginPassword">Password</label>
+                        <div class="password-field">
+                            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                            <button class="password-toggle" type="button" data-password-toggle="loginPassword">Show</button>
+                        </div>
+
+                        <div class="auth-row-between">
+                            <label class="checkbox-label">
+                                <input id="rememberSession" type="checkbox" checked>
+                                <span>Keep me signed in</span>
+                            </label>
+                            <a href="#forgot-password">Forgot password?</a>
+                        </div>
+
+                        <button class="btn btn-primary btn-block" type="submit" id="loginSubmitBtn">
+                            Log in
+                        </button>
+                    </form>
+
+                    <p class="auth-footer-text">
+                        New to InterviewPrep?
+                        <a href="#signup">Create an account</a>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="signupPage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card auth-card-wide">
+                    <div class="auth-brand-mark">✓</div>
+                    <span class="eyebrow">CREATE YOUR ACCOUNT</span>
+                    <h1>Start preparing smarter</h1>
+                    <p class="auth-subtitle">Create one secure account for your interview practice, profile and progress.</p>
+
+                    <div id="signupMessage" class="auth-message hidden" role="alert"></div>
+
+                    <form id="signupForm" class="auth-form auth-grid-form" novalidate>
+                        <div class="form-field">
+                            <label for="signupFirstName">First name</label>
+                            <input id="signupFirstName" type="text" autocomplete="given-name" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupLastName">Last name</label>
+                            <input id="signupLastName" type="text" autocomplete="family-name" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupUsername">Username</label>
+                            <input id="signupUsername" type="text" autocomplete="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_.-]+" required>
+                            <small>3–30 characters: letters, numbers, dot, dash or underscore.</small>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupDob">Date of birth</label>
+                            <input id="signupDob" type="date" autocomplete="bday" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupEmail">Email address</label>
+                            <input id="signupEmail" type="email" autocomplete="email" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupPhone">Phone number</label>
+                            <input id="signupPhone" type="tel" autocomplete="tel" placeholder="+91 9876543210" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupCountry">Country</label>
+                            <input id="signupCountry" type="text" autocomplete="country-name" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupAvatar">Profile picture</label>
+                            <input id="signupAvatar" type="file" accept="image/png,image/jpeg,image/webp">
+                            <small>Optional. Max 2 MB.</small>
+                        </div>
+
+                        <div class="form-field form-field-full">
+                            <label for="signupPassword">Password</label>
+                            <div class="password-field">
+                                <input id="signupPassword" type="password" autocomplete="new-password" required>
+                                <button class="password-toggle" type="button" data-password-toggle="signupPassword">Show</button>
+                            </div>
+                            <div class="password-requirements" id="signupPasswordRequirements">
+                                <span data-rule="length">8+ characters</span>
+                                <span data-rule="upper">Uppercase</span>
+                                <span data-rule="lower">Lowercase</span>
+                                <span data-rule="number">Number</span>
+                                <span data-rule="special">Special character</span>
+                            </div>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="signupConfirmPassword">Confirm password</label>
+                            <input id="signupConfirmPassword" type="password" autocomplete="new-password" required>
+                        </div>
+
+                        <div class="form-field form-field-full">
+                            <label class="checkbox-label checkbox-top">
+                                <input id="signupTerms" type="checkbox" required>
+                                <span>I agree to the Terms of Service and Privacy Policy.</span>
+                            </label>
+                        </div>
+
+                        <div class="form-field form-field-full">
+                            <label class="checkbox-label">
+                                <input id="signupMarketing" type="checkbox">
+                                <span>Send me occasional interview-preparation tips and product updates.</span>
+                            </label>
+                        </div>
+
+                        <div class="form-field-full">
+                            <button class="btn btn-primary btn-block" type="submit" id="signupSubmitBtn">
+                                Create account
+                            </button>
+                        </div>
+                    </form>
+
+                    <p class="auth-footer-text">
+                        Already have an account?
+                        <a href="#login">Log in</a>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="verify-emailPage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card verification-card">
+                    <div class="verification-icon">✉</div>
+                    <span class="eyebrow">EMAIL VERIFICATION</span>
+                    <h1>Verify your email</h1>
+                    <p id="verifyEmailText" class="auth-subtitle">
+                        Check your inbox for the InterviewPrep confirmation link.
+                    </p>
+
+                    <div id="verifyEmailMessage" class="auth-message hidden" role="status"></div>
+
+                    <button class="btn btn-primary btn-block" id="resendEmailBtn" type="button">
+                        Resend verification email
+                    </button>
+
+                    <button class="btn btn-secondary btn-block" id="emailVerifiedBtn" type="button">
+                        I've verified my email
+                    </button>
+
+                    <a class="auth-back-link" href="#login">Back to login</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="verify-phonePage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card verification-card">
+                    <div class="verification-icon">📱</div>
+                    <span class="eyebrow">PHONE VERIFICATION</span>
+                    <h1>Verify your phone</h1>
+                    <p class="auth-subtitle">
+                        Verify your phone number with a one-time code before using the account as a fully verified user.
+                    </p>
+
+                    <div id="phoneVerifyMessage" class="auth-message hidden" role="alert"></div>
+
+                    <form id="phoneVerifyForm" class="auth-form" novalidate>
+                        <label for="verifyPhoneInput">Phone number</label>
+                        <input id="verifyPhoneInput" type="tel" autocomplete="tel" required>
+
+                        <button class="btn btn-primary btn-block" id="sendPhoneOtpBtn" type="button">
+                            Send verification code
+                        </button>
+
+                        <label for="phoneOtpInput">6-digit verification code</label>
+                        <input id="phoneOtpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
+
+                        <button class="btn btn-secondary btn-block" id="verifyPhoneOtpBtn" type="button">
+                            Verify phone
+                        </button>
+                    </form>
+
+                    <a class="auth-back-link" href="#home">Skip for now</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="forgot-passwordPage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card">
+                    <div class="auth-brand-mark">?</div>
+                    <span class="eyebrow">ACCOUNT RECOVERY</span>
+                    <h1>Reset your password</h1>
+                    <p class="auth-subtitle">Choose a recovery method. We won't reveal whether a specific account exists.</p>
+
+                    <div class="recovery-tabs" role="tablist">
+                        <button class="recovery-tab active" type="button" data-recovery="email">Email</button>
+                        <button class="recovery-tab" type="button" data-recovery="phone">Phone</button>
+                    </div>
+
+                    <div id="forgotMessage" class="auth-message hidden" role="status"></div>
+
+                    <form id="emailRecoveryForm" class="auth-form" novalidate>
+                        <label for="recoveryEmail">Email address</label>
+                        <input id="recoveryEmail" type="email" autocomplete="email" required>
+                        <button class="btn btn-primary btn-block" type="submit">Send reset link</button>
+                    </form>
+
+                    <form id="phoneRecoveryForm" class="auth-form hidden" novalidate>
+                        <label for="recoveryPhone">Phone number</label>
+                        <input id="recoveryPhone" type="tel" autocomplete="tel" placeholder="+91 9876543210" required>
+                        <button class="btn btn-primary btn-block" type="submit">Send recovery code</button>
+
+                        <label for="recoveryOtp">6-digit code</label>
+                        <input id="recoveryOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                        <button class="btn btn-secondary btn-block" type="button" id="verifyRecoveryOtpBtn">Verify code</button>
+                    </form>
+
+                    <a class="auth-back-link" href="#login">Back to login</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="reset-passwordPage" class="page auth-page">
+            <div class="container auth-shell">
+                <div class="auth-card">
+                    <div class="auth-brand-mark">✓</div>
+                    <span class="eyebrow">SECURE RECOVERY</span>
+                    <h1>Choose a new password</h1>
+                    <p class="auth-subtitle">Use a strong password you haven't used elsewhere.</p>
+
+                    <div id="resetMessage" class="auth-message hidden" role="alert"></div>
+
+                    <form id="resetPasswordForm" class="auth-form" novalidate>
+                        <label for="resetPassword">New password</label>
+                        <div class="password-field">
+                            <input id="resetPassword" type="password" autocomplete="new-password" required>
+                            <button class="password-toggle" type="button" data-password-toggle="resetPassword">Show</button>
+                        </div>
+
+                        <label for="resetConfirmPassword">Confirm new password</label>
+                        <input id="resetConfirmPassword" type="password" autocomplete="new-password" required>
+
+                        <button class="btn btn-primary btn-block" type="submit">
+                            Update password
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================
+             PROFILE PAGE
+        ========================== -->
+
+        <section id="profilePage" class="page">
+            <div class="container page-container">
+                <button class="back-btn" data-route="home">← Back to Dashboard</button>
+
+                <div class="page-title">
+                    <span class="eyebrow">YOUR ACCOUNT</span>
+                    <h1>Profile</h1>
+                    <p>Manage your personal information, profile picture and verification status.</p>
+                </div>
+
+                <div class="profile-grid">
+                    <div class="profile-card profile-identity-card">
+                        <div class="profile-avatar-wrap">
+                            <img id="profileAvatar" class="profile-avatar" src="" alt="Profile picture">
+                            <label class="avatar-upload-btn" for="profileAvatarInput">Change</label>
+                            <input id="profileAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        </div>
+                        <h2 id="profileDisplayName">Your name</h2>
+                        <p id="profileUsername">@username</p>
+                        <span id="verifiedBadge" class="verified-badge">● Verified account</span>
+                    </div>
+
+                    <div class="profile-card">
+                        <div id="profileMessage" class="auth-message hidden" role="status"></div>
+                        <form id="profileForm" class="auth-form auth-grid-form">
+                            <div class="form-field">
+                                <label for="profileFirstName">First name</label>
+                                <input id="profileFirstName" required>
+                            </div>
+                            <div class="form-field">
+                                <label for="profileLastName">Last name</label>
+                                <input id="profileLastName" required>
+                            </div>
+                            <div class="form-field">
+                                <label for="profileUsernameInput">Username</label>
+                                <input id="profileUsernameInput" required minlength="3">
+                            </div>
+                            <div class="form-field">
+                                <label for="profileDob">Date of birth</label>
+                                <input id="profileDob" type="date">
+                            </div>
+                            <div class="form-field">
+                                <label for="profileCountry">Country</label>
+                                <input id="profileCountry">
+                            </div>
+                            <div class="form-field">
+                                <label>Email</label>
+                                <input id="profileEmail" type="email" disabled>
+                            </div>
+                            <div class="form-field">
+                                <label>Phone</label>
+                                <input id="profilePhone" disabled>
+                            </div>
+                            <div class="form-field">
+                                <label>Email status</label>
+                                <input id="profileEmailStatus" disabled>
+                            </div>
+                            <div class="form-field">
+                                <label>Phone status</label>
+                                <input id="profilePhoneStatus" disabled>
+                            </div>
+                            <div class="form-field-full">
+                                <button class="btn btn-primary" type="submit">Save profile</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </section>
 
     </main>

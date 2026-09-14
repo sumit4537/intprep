@@ -1744,3 +1744,208 @@ textarea:focus-visible {
     }
 
 }
+
+/* =========================================
+   PHASE 4A — DASHBOARD + INTERVIEW HISTORY
+========================================= */
+.dashboard-history-section {
+    padding: 48px 0 24px;
+}
+
+.history-heading-row,
+.history-title-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.history-heading-row .section-heading,
+.history-title-row {
+    margin-bottom: 24px;
+}
+
+.session-list {
+    display: grid;
+    gap: 14px;
+}
+
+.session-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, .09);
+    border-color: #cbd5e1;
+}
+
+.session-card-header,
+.session-card-meta,
+.session-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.session-card-header {
+    margin-bottom: 10px;
+}
+
+.session-card-header h3 {
+    font-size: 1.05rem;
+}
+
+.session-card-meta {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: .9rem;
+    margin-bottom: 14px;
+}
+
+.session-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.session-score {
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.session-card-actions {
+    justify-content: flex-start;
+}
+
+.session-empty {
+    padding: 30px 22px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+
+.history-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+    gap: 22px;
+    align-items: start;
+}
+
+.history-details-card {
+    position: sticky;
+    top: 96px;
+    min-height: 300px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+}
+
+.history-details-empty {
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: var(--muted);
+}
+
+.history-details-empty h2 {
+    margin: 14px 0 6px;
+    color: var(--text);
+}
+
+.history-details-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+}
+
+.history-details-header h2 {
+    margin: 5px 0;
+}
+
+.history-answer {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-answer:last-child {
+    border-bottom: 0;
+}
+
+.history-answer-number {
+    font-size: .75rem;
+    font-weight: 800;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.history-answer h4 {
+    margin: 5px 0 10px;
+    line-height: 1.45;
+}
+
+.history-answer p {
+    white-space: pre-wrap;
+    color: var(--muted);
+    font-size: .92rem;
+}
+
+.history-answer-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: .82rem;
+    color: var(--muted);
+}
+
+.history-message {
+    padding: 12px 14px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    background: var(--green-light);
+    color: var(--green);
+}
+
+@media (max-width: 860px) {
+    .history-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .history-details-card {
+        position: static;
+    }
+}
+
+@media (max-width: 640px) {
+    .history-heading-row,
+    .history-title-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .session-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

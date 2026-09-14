@@ -4,10 +4,9 @@
    =========================================================
 
    IMPORTANT:
-   - No localStorage
-   - No sessionStorage
-   - No backend
-   - All data lives in JavaScript memory
+   - Practice UI state remains in JavaScript memory
+   - Supabase Auth manages its own persisted browser session
+   - Supabase is the authentication/database backend
    - Hash routing is used to create multiple app pages
 
 ========================================================= */
@@ -567,7 +566,8 @@ function navigateTo(route) {
         "pressure",
         "voice",
         "progress",
-        "summary"
+        "summary",
+        "history"
     ];
 
     if (!validRoutes.includes(route)) {
@@ -640,7 +640,8 @@ function handleRouteChange() {
         "pressure",
         "voice",
         "progress",
-        "summary"
+        "summary",
+        "history"
     ];
 
     if (!validRoutes.includes(route)) {
@@ -850,7 +851,7 @@ $("beginInterviewBtn")
     .addEventListener("click", startInterview);
 
 
-function startInterview() {
+async function startInterview() {
 
     appState.selectedSector =
         $("sectorSelect").value;
@@ -887,6 +888,13 @@ function startInterview() {
     appState.sessionAnswers = [];
 
     appState.currentRating = 0;
+
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = new Date().toISOString();
+    appState.dbSessionMode = "pressure";
+
+    const sessionCreated = await createPersistentInterviewSession("pressure");
+    if (!sessionCreated) return;
 
 
     hideElement($("pressureSetup"));
@@ -1436,13 +1444,19 @@ $("finishSessionBtn")
     );
 
 
-function finishSession() {
+async function finishSession() {
 
     saveCurrentAnswer();
 
     stopTimer();
 
     updateSummary();
+
+    await persistCurrentAnswerToDatabase();
+    await completePersistentInterviewSession();
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = null;
+    appState.dbSessionMode = null;
 
     navigateTo("summary");
 
@@ -2547,130 +2561,74 @@ $("voiceEvaluateBtn")
     );
 
 
-function evaluateVoiceAnswer() {
+async function evaluateVoiceAnswer() {
 
-    if (
-        !appState.voiceTranscript.trim()
-    ) {
-
-        alert(
-            "Please record an answer before evaluating it."
-        );
-
+    if (!appState.voiceTranscript.trim()) {
+        alert("Please record an answer before evaluating it.");
         return;
     }
 
+    const words = appState.voiceTranscript.trim().split(/\s+/).length;
 
-    const words =
-        appState.voiceTranscript
-            .trim()
-            .split(/\s+/)
-            .length;
-
-
-    let confidence =
-        3;
-
-
-    if (words >= 80) {
-        confidence = 5;
-    } else if (words >= 50) {
-        confidence = 4;
-    } else if (words >= 25) {
-        confidence = 3;
-    } else if (words >= 10) {
-        confidence = 2;
-    } else {
-        confidence = 1;
-    }
-
+    let confidence = 3;
+    if (words >= 80) confidence = 5;
+    else if (words >= 50) confidence = 4;
+    else if (words >= 25) confidence = 3;
+    else if (words >= 10) confidence = 2;
+    else confidence = 1;
 
     let lengthFeedback;
-
-
     if (words < 20) {
-
-        lengthFeedback =
-            "Your answer was quite short. Try adding a specific example or result.";
-
+        lengthFeedback = "Your answer was quite short. Try adding a specific example or result.";
     } else if (words > 180) {
-
-        lengthFeedback =
-            "Your answer was long. Practice making your main point more concise.";
-
+        lengthFeedback = "Your answer was long. Practice making your main point more concise.";
     } else {
-
-        lengthFeedback =
-            "Your answer length is reasonable. Focus on structure and clarity.";
-
+        lengthFeedback = "Your answer length is reasonable. Focus on structure and clarity.";
     }
 
-
-    $("voiceWordCount")
-        .textContent =
-        words;
-
-
-    $("voiceConfidence")
-        .textContent =
-        `${confidence}/5`;
-
-
-    $("voiceLength")
-        .textContent =
-        lengthFeedback;
-
-
-    $("voiceFeedbackText")
-        .textContent =
+    $("voiceWordCount").textContent = words;
+    $("voiceConfidence").textContent = `${confidence}/5`;
+    $("voiceLength").textContent = lengthFeedback;
+    $("voiceFeedbackText").textContent =
         `Practice feedback: ${lengthFeedback} Use a clear structure, avoid unnecessary filler words, and support your claims with specific examples.`;
 
+    showElement($("voiceFeedback"));
 
+    /* Each evaluated voice response is stored as its own completed session. */
+    appState.selectedSector = "Voice Practice";
+    appState.selectedType = "Voice";
+    appState.selectedLevel = "General";
+    appState.sessionAnswers = [];
+    appState.dbSessionId = null;
 
-    showElement(
-        $("voiceFeedback")
-    );
+    const sessionCreated = await createPersistentInterviewSession("voice");
+    if (!sessionCreated) return;
 
+    const record = {
+        questionIndex: appState.voiceQuestionIndex,
+        question: voiceQuestions[appState.voiceQuestionIndex],
+        answer: appState.voiceTranscript,
+        rating: confidence,
+        timestamp: new Date().toISOString(),
+        timeTaken: 0,
+        sector: "Voice Practice",
+        type: "Voice",
+        level: "General"
+    };
 
-    /*
-       Voice practice also contributes to the
-       in-memory progress dashboard.
-    */
+    appState.sessionAnswers.push(record);
+    appState.allAnswers.push(record);
 
-    appState.allAnswers.push({
+    const saved = await persistInterviewAnswer(record);
+    if (!saved) return;
 
-        questionIndex:
-            appState.voiceQuestionIndex,
+    await completePersistentInterviewSession();
 
-        question:
-            voiceQuestions[
-                appState.voiceQuestionIndex
-            ],
-
-        answer:
-            appState.voiceTranscript,
-
-        rating:
-            confidence,
-
-        timestamp:
-            new Date().toISOString(),
-
-        timeTaken:
-            0,
-
-        sector:
-            "Voice Practice",
-
-        type:
-            "Voice",
-
-        level:
-            "General"
-
-    });
-
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = null;
+    appState.dbSessionMode = null;
 }
+
 
 
 /* =========================================================
@@ -2711,3 +2669,1875 @@ window.addEventListener(
 
     }
 );
+
+
+/* =========================================================
+   INTERVIEWPREP PHASE 2 — SUPABASE AUTHENTICATION
+========================================================= */
+
+/*
+  IMPORTANT:
+  Replace these two values with the Project URL and
+  Publishable/Anon key from your Supabase project.
+
+  Never put the Supabase service_role key in this file.
+*/
+/* =========================================================
+   PHASE 4A — PERSISTENCE, DASHBOARD + INTERVIEW HISTORY
+========================================================= */
+
+appState.dbSessionId = null;
+appState.dbSessionStartedAt = null;
+appState.dbSessionMode = null;
+
+function phase4aConfigured() {
+    return Boolean(
+        typeof supabaseClient !== "undefined" &&
+        supabaseClient &&
+        typeof authState !== "undefined" &&
+        authState.user
+    );
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatHistoryDate(value) {
+    if (!value) return "Unknown date";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Unknown date";
+    return date.toLocaleString([], {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function historySessionTitle(session) {
+    if (session.mode === "voice") return "Voice Practice";
+    return `${session.sector || "Interview"} • ${session.interview_type || "Mixed"}`;
+}
+
+function historyAverageLabel(value) {
+    return value === null || value === undefined || value === ""
+        ? "--"
+        : `${Number(value).toFixed(1)} / 5`;
+}
+
+function historyTimeLabel(value) {
+    if (value === null || value === undefined || value === "") return "--";
+    return formatSeconds(Number(value));
+}
+
+async function createPersistentInterviewSession(mode = "pressure") {
+    if (!phase4aConfigured()) return true;
+
+    const payload = {
+        user_id: authState.user.id,
+        sector: appState.selectedSector || "Generic/Other",
+        interview_type: appState.selectedType || "Mixed",
+        experience_level: appState.selectedLevel || "Fresher/Entry-level",
+        mode,
+        question_count: appState.questions?.length || 0,
+        started_at: appState.dbSessionStartedAt || new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseClient
+        .from("interview_sessions")
+        .insert(payload)
+        .select("id")
+        .single();
+
+    if (error) {
+        console.error("Could not create interview session:", error);
+        showHistoryMessage("Your interview could not be saved. Check your Supabase database setup.", true);
+        return false;
+    }
+
+    appState.dbSessionId = data.id;
+    appState.dbSessionStartedAt = payload.started_at;
+    appState.dbSessionMode = mode;
+    return true;
+}
+
+function getQuestionId(record) {
+    return [
+        record.sector || appState.selectedSector,
+        record.type || appState.selectedType,
+        record.level || appState.selectedLevel,
+        record.questionIndex ?? 0
+    ].join("::");
+}
+
+async function persistInterviewAnswer(record) {
+    if (!phase4aConfigured() || !appState.dbSessionId) return true;
+
+    const payload = {
+        session_id: appState.dbSessionId,
+        user_id: authState.user.id,
+        question_id: getQuestionId(record),
+        question: record.question,
+        answer: record.answer || "",
+        confidence: Number(record.rating) || null,
+        time_taken_seconds: Number(record.timeTaken) || 0,
+        mode: appState.dbSessionMode || "pressure"
+    };
+
+    const { error } = await supabaseClient
+        .from("interview_answers")
+        .upsert(payload, { onConflict: "session_id,question_id" });
+
+    if (error) {
+        console.error("Could not save interview answer:", error);
+        showHistoryMessage("Your answer could not be saved to your account.", true);
+        return false;
+    }
+
+    return true;
+}
+
+async function completePersistentInterviewSession() {
+    if (!phase4aConfigured() || !appState.dbSessionId) return true;
+
+    const answers = (appState.sessionAnswers || []).filter(item => item.answer?.trim() || item.rating > 0);
+    const rated = answers.filter(item => Number(item.rating) > 0);
+    const averageConfidence = rated.length
+        ? rated.reduce((sum, item) => sum + Number(item.rating), 0) / rated.length
+        : null;
+    const averageTime = answers.length
+        ? answers.reduce((sum, item) => sum + Number(item.timeTaken || 0), 0) / answers.length
+        : null;
+
+    const { error } = await supabaseClient
+        .from("interview_sessions")
+        .update({
+            question_count: answers.length,
+            average_confidence: averageConfidence,
+            average_time_seconds: averageTime,
+            completed_at: new Date().toISOString()
+        })
+        .eq("id", appState.dbSessionId)
+        .eq("user_id", authState.user.id);
+
+    if (error) {
+        console.error("Could not complete interview session:", error);
+        return false;
+    }
+
+    return true;
+}
+
+async function persistCurrentAnswerToDatabase() {
+    if (!phase4aConfigured() || !appState.dbSessionId) return;
+    const record = appState.sessionAnswers?.find(
+        item => item.questionIndex === appState.currentQuestionIndex
+    );
+    if (!record) return;
+    await persistInterviewAnswer(record);
+}
+
+async function fetchInterviewSessions(limit = 20) {
+    if (!phase4aConfigured()) return [];
+
+    const { data, error } = await supabaseClient
+        .from("interview_sessions")
+        .select("id,user_id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,started_at,completed_at,created_at")
+        .eq("user_id", authState.user.id)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) {
+        console.error("Could not load interview history:", error);
+        return [];
+    }
+    return data || [];
+}
+
+function renderSessionCard(session, compact = false) {
+    const complete = Boolean(session.completed_at);
+    const score = historyAverageLabel(session.average_confidence);
+    const count = Number(session.question_count || 0);
+
+    return `
+        <article class="session-card" data-session-id="${escapeHtml(session.id)}">
+            <div class="session-card-header">
+                <div>
+                    <span class="session-pill">${escapeHtml(session.mode === "voice" ? "Voice" : "Interview")}</span>
+                    <h3>${escapeHtml(historySessionTitle(session))}</h3>
+                </div>
+                <span class="session-score">${escapeHtml(score)}</span>
+            </div>
+            <div class="session-card-meta">
+                <span>${escapeHtml(session.experience_level || "General")}</span>
+                <span>•</span>
+                <span>${count} question${count === 1 ? "" : "s"}</span>
+                <span>•</span>
+                <span>${escapeHtml(historyTimeLabel(session.average_time_seconds))} avg.</span>
+                <span>•</span>
+                <span>${escapeHtml(formatHistoryDate(session.created_at || session.started_at))}</span>
+            </div>
+            <div class="session-card-actions">
+                <button type="button" class="btn btn-primary btn-small" data-history-view="${escapeHtml(session.id)}">Review</button>
+                ${compact ? "" : `<button type="button" class="btn btn-secondary btn-small" data-history-delete="${escapeHtml(session.id)}">Delete</button>`}
+                ${complete ? "" : `<span class="session-pill">In progress</span>`}
+            </div>
+        </article>
+    `;
+}
+
+function renderRecentSessions(sessions) {
+    const list = $("recentSessionsList");
+    if (!list) return;
+
+    if (!phase4aConfigured()) {
+        list.innerHTML = '<div class="session-empty">Connect Supabase and log in to save interview history.</div>';
+        return;
+    }
+
+    if (!sessions.length) {
+        list.innerHTML = '<div class="session-empty">No completed interview sessions yet. Start practicing to create your first record.</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.slice(0, 3).map(session => renderSessionCard(session, true)).join("");
+}
+
+function renderHistoryList(sessions) {
+    const list = $("historyList");
+    if (!list) return;
+
+    if (!phase4aConfigured()) {
+        list.innerHTML = '<div class="session-empty">Log in with your Supabase account to view your private interview history.</div>';
+        return;
+    }
+
+    if (!sessions.length) {
+        list.innerHTML = '<div class="session-empty">No interview sessions found.</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.map(session => renderSessionCard(session)).join("");
+}
+
+async function viewHistorySession(sessionId) {
+    if (!phase4aConfigured() || !sessionId) return;
+    const details = $("historyDetails");
+    if (!details) return;
+
+    details.innerHTML = '<div class="history-details-empty"><h2>Loading session...</h2><p>Fetching your saved answers.</p></div>';
+
+    const { data: session, error: sessionError } = await supabaseClient
+        .from("interview_sessions")
+        .select("id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,created_at,completed_at")
+        .eq("id", sessionId)
+        .eq("user_id", authState.user.id)
+        .single();
+
+    if (sessionError || !session) {
+        details.innerHTML = '<div class="history-details-empty"><h2>Session unavailable</h2><p>This session could not be loaded.</p></div>';
+        return;
+    }
+
+    const { data: answers, error: answerError } = await supabaseClient
+        .from("interview_answers")
+        .select("id,question_id,question,answer,confidence,time_taken_seconds,created_at")
+        .eq("session_id", sessionId)
+        .eq("user_id", authState.user.id)
+        .order("created_at", { ascending: true });
+
+    if (answerError) {
+        details.innerHTML = '<div class="history-details-empty"><h2>Answers unavailable</h2><p>The session exists, but its answers could not be loaded.</p></div>';
+        return;
+    }
+
+    const answerHtml = (answers || []).map((answer, index) => `
+        <article class="history-answer">
+            <span class="history-answer-number">Question ${index + 1}</span>
+            <h4>${escapeHtml(answer.question)}</h4>
+            <p>${escapeHtml(answer.answer || "No written answer was saved.")}</p>
+            <div class="history-answer-footer">
+                <span>Confidence: ${escapeHtml(answer.confidence ? `${answer.confidence}/5` : "Not rated")}</span>
+                <span>Time: ${escapeHtml(historyTimeLabel(answer.time_taken_seconds))}</span>
+            </div>
+        </article>
+    `).join("");
+
+    details.innerHTML = `
+        <div class="history-details-header">
+            <span class="session-pill">${escapeHtml(session.mode === "voice" ? "Voice Practice" : "Interview")}</span>
+            <h2>${escapeHtml(historySessionTitle(session))}</h2>
+            <p>${escapeHtml(formatHistoryDate(session.created_at))}</p>
+            <div class="session-card-meta">
+                <span>${Number(session.question_count || 0)} questions</span>
+                <span>•</span>
+                <span>${escapeHtml(historyAverageLabel(session.average_confidence))}</span>
+                <span>•</span>
+                <span>${escapeHtml(historyTimeLabel(session.average_time_seconds))} avg.</span>
+            </div>
+        </div>
+        ${answerHtml || '<div class="session-empty">No answers were saved for this session.</div>'}
+    `;
+}
+
+async function deleteHistorySession(sessionId) {
+    if (!phase4aConfigured() || !sessionId) return;
+    if (!window.confirm("Delete this interview session and its saved answers? This cannot be undone.")) return;
+
+    const { error } = await supabaseClient
+        .from("interview_sessions")
+        .delete()
+        .eq("id", sessionId)
+        .eq("user_id", authState.user.id);
+
+    if (error) {
+        showHistoryMessage("Could not delete this session.", true);
+        return;
+    }
+
+    $("historyDetails").innerHTML = '<div class="history-details-empty"><h2>Select a session</h2><p>Choose an interview from your history to review its saved answers.</p></div>';
+    await refreshPhase4AData();
+    showHistoryMessage("Interview session deleted.");
+}
+
+function showHistoryMessage(message, isError = false) {
+    const element = $("historyMessage");
+    if (!element) return;
+    element.textContent = message;
+    element.classList.remove("hidden");
+    element.style.background = isError ? "#fee2e2" : "var(--green-light)";
+    element.style.color = isError ? "var(--danger)" : "var(--green)";
+    clearTimeout(showHistoryMessage.timer);
+    showHistoryMessage.timer = setTimeout(() => element.classList.add("hidden"), 3500);
+}
+
+async function refreshPhase4AData() {
+    if (!phase4aConfigured()) {
+        renderRecentSessions([]);
+        renderHistoryList([]);
+        return;
+    }
+
+    const sessions = await fetchInterviewSessions(20);
+    renderRecentSessions(sessions);
+    renderHistoryList(sessions);
+}
+
+function bindPhase4AEvents() {
+    $("refreshHistoryBtn")?.addEventListener("click", refreshPhase4AData);
+
+    document.addEventListener("click", event => {
+        const viewButton = event.target.closest("[data-history-view]");
+        if (viewButton) {
+            if (getRoute() !== "history") routeTo("history");
+            setTimeout(() => viewHistorySession(viewButton.dataset.historyView), 0);
+            return;
+        }
+
+        const deleteButton = event.target.closest("[data-history-delete]");
+        if (deleteButton) {
+            deleteHistorySession(deleteButton.dataset.historyDelete);
+        }
+    });
+}
+
+// Persist the current question after the original in-memory save routine runs.
+const phase4aOriginalSaveCurrentAnswer = saveCurrentAnswer;
+saveCurrentAnswer = function () {
+    phase4aOriginalSaveCurrentAnswer();
+    persistCurrentAnswerToDatabase();
+};
+
+// Load account-backed dashboard/history whenever authentication becomes available.
+const phase4aOriginalUpdateHomeStats = updateHomeStats;
+updateHomeStats = function () {
+    phase4aOriginalUpdateHomeStats();
+    refreshPhase4AData();
+};
+
+const phase4aOriginalUpdateProgressPage = updateProgressPage;
+updateProgressPage = function () {
+    phase4aOriginalUpdateProgressPage();
+    refreshPhase4AData();
+};
+
+bindPhase4AEvents();
+
+const SUPABASE_URL = "https://vskygcjkkwjcidpxzega.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_oN2DPPNKJqlkvBkjUMHyqA_W4FfaJE7";
+
+const supabaseClient =
+    SUPABASE_URL !== "https://vskygcjkkwjcidpxzega.supabase.co" &&
+    SUPABASE_PUBLISHABLE_KEY !== "sb_publishable_oN2DPPNKJqlkvBkjUMHyqA_W4FfaJE7"
+        ? window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_PUBLISHABLE_KEY
+        )
+        : null;
+
+const AUTH_ROUTES = new Set([
+    "login",
+    "signup",
+    "verify-email",
+    "verify-phone",
+    "forgot-password",
+    "reset-password"
+]);
+
+const PROTECTED_ROUTES = new Set([
+    "home",
+    "pressure",
+    "voice",
+    "progress",
+    "summary",
+    "history",
+    "profile"
+]);
+
+const PUBLIC_ROUTES = new Set([
+    "login",
+    "signup",
+    "verify-email",
+    "verify-phone",
+    "forgot-password",
+    "reset-password"
+]);
+
+const authState = {
+    session: null,
+    user: null,
+    profile: null,
+    initialized: false,
+    pendingSignup: null,
+    phoneRecovery: false
+};
+
+function authElement(id) {
+    return document.getElementById(id);
+}
+
+function showAuthMessage(id, message, type = "info") {
+    const element = authElement(id);
+    if (!element) return;
+
+    element.textContent = message;
+    element.className = `auth-message ${type}`;
+}
+
+function clearAuthMessage(id) {
+    const element = authElement(id);
+    if (!element) return;
+
+    element.textContent = "";
+    element.className = "auth-message hidden";
+}
+
+function authConfigured() {
+    return Boolean(supabaseClient);
+}
+
+function authConfigGuard() {
+    if (authConfigured()) return true;
+
+    const message =
+        "Supabase is not connected yet. Add your Supabase URL and publishable key in script.js.";
+
+    showAuthMessage("loginMessage", message, "error");
+    showAuthMessage("signupMessage", message, "error");
+    return false;
+}
+
+function getRoute() {
+    return window.location.hash.replace("#", "") || "home";
+}
+
+function routeTo(route) {
+    window.location.hash = `#${route}`;
+}
+
+function normalizePhone(phone) {
+    return phone.trim().replace(/[^\d+]/g, "");
+}
+
+function isStrongPassword(password) {
+    return (
+        password.length >= 8 &&
+        /[A-Z]/.test(password) &&
+        /[a-z]/.test(password) &&
+        /\d/.test(password) &&
+        /[^A-Za-z0-9]/.test(password)
+    );
+}
+
+function updatePasswordRequirementUI(password) {
+    const checks = {
+        length: password.length >= 8,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /\d/.test(password),
+        special: /[^A-Za-z0-9]/.test(password)
+    };
+
+    Object.entries(checks).forEach(([rule, valid]) => {
+        const element =
+            document.querySelector(`[data-rule="${rule}"]`);
+
+        if (element) {
+            element.classList.toggle("valid", valid);
+        }
+    });
+}
+
+function setAuthLoading(button, loading, loadingText = "Please wait...") {
+    if (!button) return;
+
+    if (loading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = loadingText;
+        button.disabled = true;
+    } else {
+        button.textContent =
+            button.dataset.originalText || button.textContent;
+        button.disabled = false;
+    }
+}
+
+function setHeaderAuthUI() {
+    const guest = authElement("authGuestActions");
+    const user = authElement("authUserActions");
+
+    if (!guest || !user) return;
+
+    const loggedIn = Boolean(authState.user);
+
+    guest.classList.toggle("hidden", loggedIn);
+    user.classList.toggle("hidden", !loggedIn);
+
+    if (loggedIn) {
+        const first =
+            authState.profile?.first_name ||
+            authState.user.user_metadata?.first_name ||
+            "Account";
+
+        const last =
+            authState.profile?.last_name ||
+            authState.user.user_metadata?.last_name ||
+            "";
+
+        const displayName =
+            `${first} ${last}`.trim();
+
+        const nameElement = authElement("headerUserName");
+        const avatar = authElement("headerAvatar");
+
+        if (nameElement) {
+            nameElement.textContent = displayName;
+        }
+
+        if (avatar) {
+            avatar.src =
+                authState.profile?.avatar_url ||
+                createAvatarDataUri(displayName);
+
+            avatar.alt = `${displayName} profile picture`;
+        }
+    }
+}
+
+function createAvatarDataUri(name) {
+    const letter =
+        (name || "U").trim().charAt(0).toUpperCase();
+
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+            <rect width="128" height="128" rx="64" fill="#dbeafe"/>
+            <text x="50%" y="54%" dominant-baseline="middle"
+                text-anchor="middle"
+                font-family="Arial, sans-serif"
+                font-size="54"
+                font-weight="700"
+                fill="#2563eb">${letter}</text>
+        </svg>
+    `;
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+async function loadUserProfile() {
+    if (!supabaseClient || !authState.user) {
+        return null;
+    }
+
+    const { data, error } =
+        await supabaseClient
+            .from("profiles")
+            .select("*")
+            .eq("id", authState.user.id)
+            .maybeSingle();
+
+    if (error) {
+        console.error("Profile load error:", error);
+        return null;
+    }
+
+    if (data) {
+        authState.profile = data;
+        return data;
+    }
+
+    /*
+      Email confirmation can mean signup initially returns no session.
+      Therefore profile creation is deferred until the first authenticated
+      session if a row does not yet exist.
+    */
+    const metadata = authState.user.user_metadata || {};
+
+    const profilePayload = {
+        id: authState.user.id,
+        first_name: metadata.first_name || "User",
+        last_name: metadata.last_name || "",
+        username: metadata.username || `user_${authState.user.id.slice(0, 8)}`,
+        date_of_birth: metadata.date_of_birth || null,
+        country: metadata.country || null,
+        avatar_url: null
+    };
+
+    const { data: created, error: createError } =
+        await supabaseClient
+            .from("profiles")
+            .insert(profilePayload)
+            .select()
+            .single();
+
+    if (createError) {
+        /*
+          A username collision should not break authentication.
+          The profile can be completed from the Profile page.
+        */
+        console.warn("Profile creation deferred:", createError.message);
+        return null;
+    }
+
+    authState.profile = created;
+    return created;
+}
+
+function isEmailVerified() {
+    return Boolean(authState.user?.email_confirmed_at);
+}
+
+function isPhoneVerified() {
+    return Boolean(authState.user?.phone_confirmed_at);
+}
+
+function isFullyVerified() {
+    return isEmailVerified() && isPhoneVerified();
+}
+
+async function requireAuthenticatedRoute(route) {
+    if (!authConfigured()) {
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient.auth.getSession();
+
+    if (error) {
+        console.error("Session error:", error);
+    }
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (!authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+
+    /*
+      The main practice dashboard is available only to authenticated users.
+    */
+    if (route === "home" && !authState.user) {
+        routeTo("login");
+    }
+}
+
+async function routeAuthGuard() {
+    const route = getRoute();
+
+    if (!authConfigured()) {
+        setHeaderAuthUI();
+        return;
+    }
+
+    const { data } =
+        await supabaseClient.auth.getSession();
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (authState.user) {
+        await loadUserProfile();
+    }
+
+    setHeaderAuthUI();
+
+    if (PROTECTED_ROUTES.has(route) && !authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    if (
+        route === "login" &&
+        authState.user
+    ) {
+        routeTo("home");
+        return;
+    }
+
+    if (
+        route === "signup" &&
+        authState.user
+    ) {
+        routeTo("home");
+        return;
+    }
+
+    /*
+      Preserve the existing application's router, but make sure the
+      new auth-only pages become visible.
+    */
+    const authPage = document.getElementById(`${route}Page`);
+
+    if (authPage) {
+        document.querySelectorAll(".page").forEach(page => {
+            page.classList.remove("active-page");
+        });
+
+        authPage.classList.add("active-page");
+    }
+
+    if (route === "profile" && authState.user) {
+        renderProfile();
+    }
+
+    if (route === "verify-email") {
+        updateEmailVerificationPage();
+    }
+
+    if (route === "verify-phone") {
+        preparePhoneVerificationPage();
+    }
+
+    if (route === "reset-password") {
+        updateResetPasswordRoute();
+    }
+}
+
+function updateEmailVerificationPage() {
+    const text = authElement("verifyEmailText");
+
+    if (!text) return;
+
+    const email =
+        authState.user?.email ||
+        authState.pendingSignup?.email ||
+        "your email address";
+
+    text.textContent =
+        `We sent a verification link to ${email}. Open it, then return here to continue.`;
+}
+
+async function signupUser() {
+    if (!authConfigGuard()) return;
+
+    const firstName = authElement("signupFirstName").value.trim();
+    const lastName = authElement("signupLastName").value.trim();
+    const username = authElement("signupUsername").value.trim();
+    const dateOfBirth = authElement("signupDob").value;
+    const email = authElement("signupEmail").value.trim().toLowerCase();
+    const phone = normalizePhone(authElement("signupPhone").value);
+    const country = authElement("signupCountry").value.trim();
+    const password = authElement("signupPassword").value;
+    const confirmPassword = authElement("signupConfirmPassword").value;
+    const terms = authElement("signupTerms").checked;
+    const marketing = authElement("signupMarketing").checked;
+    const avatarFile = authElement("signupAvatar").files[0];
+
+    clearAuthMessage("signupMessage");
+
+    if (
+        !firstName ||
+        !lastName ||
+        !username ||
+        !dateOfBirth ||
+        !email ||
+        !phone ||
+        !country
+    ) {
+        showAuthMessage(
+            "signupMessage",
+            "Please complete all required fields.",
+            "error"
+        );
+        return;
+    }
+
+    if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
+        showAuthMessage(
+            "signupMessage",
+            "Username must be 3–30 characters and use only letters, numbers, dot, dash or underscore.",
+            "error"
+        );
+        return;
+    }
+
+    if (!isStrongPassword(password)) {
+        showAuthMessage(
+            "signupMessage",
+            "Password must contain at least 8 characters, uppercase, lowercase, number and special character.",
+            "error"
+        );
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showAuthMessage(
+            "signupMessage",
+            "Passwords do not match.",
+            "error"
+        );
+        return;
+    }
+
+    if (!terms) {
+        showAuthMessage(
+            "signupMessage",
+            "You must accept the Terms of Service and Privacy Policy.",
+            "error"
+        );
+        return;
+    }
+
+    if (avatarFile && avatarFile.size > 2 * 1024 * 1024) {
+        showAuthMessage(
+            "signupMessage",
+            "Profile picture must be 2 MB or smaller.",
+            "error"
+        );
+        return;
+    }
+
+    const submitButton = authElement("signupSubmitBtn");
+    setAuthLoading(submitButton, true, "Creating account...");
+
+    const { data, error } =
+        await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                emailRedirectTo: `${window.location.origin}${window.location.pathname}#verify-email`,
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                    username,
+                    date_of_birth: dateOfBirth,
+                    country,
+                    signup_phone: phone,
+                    marketing_opt_in: marketing
+                }
+            }
+        });
+
+    setAuthLoading(submitButton, false);
+
+    if (error) {
+        showAuthMessage(
+            "signupMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.pendingSignup = {
+        email,
+        phone,
+        firstName,
+        lastName,
+        username,
+        dateOfBirth,
+        country,
+        marketing,
+        avatarFile
+    };
+
+    /*
+      With email confirmation enabled, Supabase normally returns a user
+      without an active session. The user verifies email first.
+    */
+    if (data?.session) {
+        authState.session = data.session;
+        authState.user = data.user;
+
+        await createOrUpdateProfileFromSignup();
+        routeTo("verify-phone");
+    } else {
+        showAuthMessage(
+            "signupMessage",
+            "Account created. Check your email and click the verification link before logging in.",
+            "success"
+        );
+
+        setTimeout(() => routeTo("verify-email"), 700);
+    }
+}
+
+async function createOrUpdateProfileFromSignup() {
+    if (!authState.user || !authState.pendingSignup) return;
+
+    const pending = authState.pendingSignup;
+
+    const profilePayload = {
+        id: authState.user.id,
+        first_name: pending.firstName,
+        last_name: pending.lastName,
+        username: pending.username,
+        date_of_birth: pending.dateOfBirth || null,
+        country: pending.country || null,
+        avatar_url: null
+    };
+
+    const { error } =
+        await supabaseClient
+            .from("profiles")
+            .upsert(profilePayload, { onConflict: "id" });
+
+    if (error) {
+        console.warn("Profile creation failed:", error.message);
+    }
+
+    await loadUserProfile();
+
+    if (pending.avatarFile) {
+        await uploadAvatar(pending.avatarFile);
+    }
+}
+
+async function loginUser() {
+    if (!authConfigGuard()) return;
+
+    const email = authElement("loginEmail").value.trim().toLowerCase();
+    const password = authElement("loginPassword").value;
+
+    clearAuthMessage("loginMessage");
+
+    if (!email || !password) {
+        showAuthMessage(
+            "loginMessage",
+            "Enter your email and password.",
+            "error"
+        );
+        return;
+    }
+
+    const submitButton = authElement("loginSubmitBtn");
+    setAuthLoading(submitButton, true, "Logging in...");
+
+    const { data, error } =
+        await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+        });
+
+    setAuthLoading(submitButton, false);
+
+    if (error) {
+        showAuthMessage(
+            "loginMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.session = data.session;
+    authState.user = data.user;
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+
+    if (!isEmailVerified()) {
+        routeTo("verify-email");
+        return;
+    }
+
+    if (!isPhoneVerified()) {
+        routeTo("verify-phone");
+        return;
+    }
+
+    routeTo("home");
+}
+
+async function resendEmailVerification() {
+    if (!authConfigured()) return;
+
+    const email =
+        authState.user?.email ||
+        authState.pendingSignup?.email;
+
+    if (!email) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Enter your email by returning to the login page.",
+            "error"
+        );
+        return;
+    }
+
+    const button = authElement("resendEmailBtn");
+    setAuthLoading(button, true, "Sending...");
+
+    const { error } =
+        await supabaseClient.auth.resend({
+            type: "signup",
+            email
+        });
+
+    setAuthLoading(button, false);
+
+    if (error) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "verifyEmailMessage",
+        "A new verification email has been sent.",
+        "success"
+    );
+}
+
+async function continueAfterEmailVerification() {
+    if (!authConfigured()) return;
+
+    const { data } =
+        await supabaseClient.auth.getSession();
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (!authState.user) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Email verified. Please log in to continue.",
+            "success"
+        );
+        setTimeout(() => routeTo("login"), 900);
+        return;
+    }
+
+    await loadUserProfile();
+
+    if (!isEmailVerified()) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Your email is not marked as verified yet. Open the latest email and try again.",
+            "error"
+        );
+        return;
+    }
+
+    routeTo(
+        isPhoneVerified()
+            ? "home"
+            : "verify-phone"
+    );
+}
+
+async function sendPhoneVerificationOtp() {
+    if (!authConfigured() || !authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    const phone = normalizePhone(
+        authElement("verifyPhoneInput").value
+    );
+
+    if (!phone) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            "Enter a valid phone number.",
+            "error"
+        );
+        return;
+    }
+
+    const button = authElement("sendPhoneOtpBtn");
+    setAuthLoading(button, true, "Sending code...");
+
+    /*
+      updateUser(phone) starts the phone-change verification flow
+      for an already authenticated user.
+    */
+    const { error } =
+        await supabaseClient.auth.updateUser({
+            phone
+        });
+
+    setAuthLoading(button, false);
+
+    if (error) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "phoneVerifyMessage",
+        "Verification code sent. Enter the 6-digit code below.",
+        "success"
+    );
+}
+
+async function verifyPhoneOtp() {
+    if (!authConfigured() || !authState.user) return;
+
+    const phone = normalizePhone(
+        authElement("verifyPhoneInput").value
+    );
+
+    const token =
+        authElement("phoneOtpInput").value.trim();
+
+    if (!phone || !/^\d{6}$/.test(token)) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            "Enter the 6-digit verification code.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.verifyOtp({
+            phone,
+            token,
+            type: "phone_change"
+        });
+
+    if (error) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    const { data } =
+        await supabaseClient.auth.getUser();
+
+    authState.user = data?.user || authState.user;
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+
+    showAuthMessage(
+        "phoneVerifyMessage",
+        "Phone verified successfully. Your InterviewPrep account is now fully verified.",
+        "success"
+    );
+
+    setTimeout(() => routeTo("home"), 900);
+}
+
+function preparePhoneVerificationPage() {
+    const input = authElement("verifyPhoneInput");
+    if (!input) return;
+
+    if (!input.value) {
+        input.value =
+            authState.user?.phone ||
+            authState.pendingSignup?.phone ||
+            "";
+    }
+}
+
+async function sendEmailRecovery() {
+    if (!authConfigGuard()) return;
+
+    const email =
+        authElement("recoveryEmail").value.trim().toLowerCase();
+
+    if (!email) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter your email address.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.resetPasswordForEmail(
+            email,
+            {
+                redirectTo:
+                    `${window.location.origin}${window.location.pathname}#reset-password`
+            }
+        );
+
+    /*
+      Intentionally use the same public message for success and
+      account-not-found scenarios.
+    */
+    if (error) {
+        console.warn("Recovery request:", error.message);
+    }
+
+    showAuthMessage(
+        "forgotMessage",
+        "If an account is associated with that email, a password-reset link has been sent.",
+        "success"
+    );
+}
+
+async function sendPhoneRecovery() {
+    if (!authConfigGuard()) return;
+
+    const phone =
+        normalizePhone(
+            authElement("recoveryPhone").value
+        );
+
+    if (!phone) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter your phone number.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.signInWithOtp({
+            phone,
+            options: {
+                shouldCreateUser: false
+            }
+        });
+
+    if (error) {
+        console.warn("Phone recovery request:", error.message);
+    }
+
+    showAuthMessage(
+        "forgotMessage",
+        "If an account is associated with that phone number, a recovery code has been sent.",
+        "success"
+    );
+
+    authState.phoneRecovery = true;
+}
+
+async function verifyPhoneRecoveryOtp() {
+    if (!authConfigured()) return;
+
+    const phone =
+        normalizePhone(
+            authElement("recoveryPhone").value
+        );
+
+    const token =
+        authElement("recoveryOtp").value.trim();
+
+    if (!phone || !/^\d{6}$/.test(token)) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter the 6-digit recovery code.",
+            "error"
+        );
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient.auth.verifyOtp({
+            phone,
+            token,
+            type: "sms"
+        });
+
+    if (error) {
+        showAuthMessage(
+            "forgotMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.session = data.session;
+    authState.user = data.user;
+
+    routeTo("reset-password");
+}
+
+function updateResetPasswordRoute() {
+    /*
+      The page itself is protected by the recovery session generated
+      from either email recovery or phone OTP recovery.
+    */
+    if (!authState.user) {
+        showAuthMessage(
+            "resetMessage",
+            "Your recovery session is missing or has expired. Start recovery again.",
+            "error"
+        );
+    }
+}
+
+async function resetPassword() {
+    if (!authConfigured()) return;
+
+    const password =
+        authElement("resetPassword").value;
+
+    const confirmation =
+        authElement("resetConfirmPassword").value;
+
+    if (!isStrongPassword(password)) {
+        showAuthMessage(
+            "resetMessage",
+            "Password must contain at least 8 characters, uppercase, lowercase, number and special character.",
+            "error"
+        );
+        return;
+    }
+
+    if (password !== confirmation) {
+        showAuthMessage(
+            "resetMessage",
+            "Passwords do not match.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.updateUser({
+            password
+        });
+
+    if (error) {
+        showAuthMessage(
+            "resetMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "resetMessage",
+        "Password updated successfully. You can now continue to your dashboard.",
+        "success"
+    );
+
+    setTimeout(() => routeTo("home"), 900);
+}
+
+async function logoutUser() {
+    if (!supabaseClient) return;
+
+    await supabaseClient.auth.signOut();
+
+    authState.session = null;
+    authState.user = null;
+    authState.profile = null;
+
+    setHeaderAuthUI();
+    routeTo("login");
+}
+
+function renderProfile() {
+    if (!authState.user) return;
+
+    const profile = authState.profile || {};
+    const user = authState.user;
+
+    const displayName =
+        `${profile.first_name || user.user_metadata?.first_name || "User"} ${profile.last_name || user.user_metadata?.last_name || ""}`.trim();
+
+    const avatarUrl =
+        profile.avatar_url ||
+        createAvatarDataUri(displayName);
+
+    const avatar = authElement("profileAvatar");
+    if (avatar) {
+        avatar.src = avatarUrl;
+        avatar.alt = `${displayName} profile picture`;
+    }
+
+    const display = authElement("profileDisplayName");
+    if (display) display.textContent = displayName;
+
+    const username = authElement("profileUsername");
+    if (username) {
+        username.textContent =
+            profile.username
+                ? `@${profile.username}`
+                : "@username";
+    }
+
+    const verified = authElement("verifiedBadge");
+    if (verified) {
+        const verifiedAccount = isFullyVerified();
+        verified.textContent =
+            verifiedAccount
+                ? "● Verified account"
+                : "● Verification incomplete";
+        verified.classList.toggle(
+            "unverified",
+            !verifiedAccount
+        );
+    }
+
+    const mappings = {
+        profileFirstName: profile.first_name || "",
+        profileLastName: profile.last_name || "",
+        profileUsernameInput: profile.username || "",
+        profileDob: profile.date_of_birth || "",
+        profileCountry: profile.country || "",
+        profileEmail: user.email || "",
+        profilePhone: user.phone || "",
+        profileEmailStatus:
+            isEmailVerified()
+                ? "Verified"
+                : "Not verified",
+        profilePhoneStatus:
+            isPhoneVerified()
+                ? "Verified"
+                : "Not verified"
+    };
+
+    Object.entries(mappings).forEach(([id, value]) => {
+        const element = authElement(id);
+        if (element) element.value = value;
+    });
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+
+    if (!authState.user || !supabaseClient) return;
+
+    const payload = {
+        id: authState.user.id,
+        first_name:
+            authElement("profileFirstName").value.trim(),
+        last_name:
+            authElement("profileLastName").value.trim(),
+        username:
+            authElement("profileUsernameInput").value.trim(),
+        date_of_birth:
+            authElement("profileDob").value || null,
+        country:
+            authElement("profileCountry").value.trim() || null
+    };
+
+    if (!payload.first_name || !payload.last_name || !payload.username) {
+        showAuthMessage(
+            "profileMessage",
+            "First name, last name and username are required.",
+            "error"
+        );
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient
+            .from("profiles")
+            .upsert(payload, { onConflict: "id" })
+            .select()
+            .single();
+
+    if (error) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.profile = data;
+    setHeaderAuthUI();
+    renderProfile();
+
+    showAuthMessage(
+        "profileMessage",
+        "Profile updated successfully.",
+        "success"
+    );
+}
+
+async function uploadAvatar(file) {
+    if (!file || !authState.user || !supabaseClient) {
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        showAuthMessage(
+            "profileMessage",
+            "Profile picture must be 2 MB or smaller.",
+            "error"
+        );
+        return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        showAuthMessage(
+            "profileMessage",
+            "Only JPG, PNG and WebP images are supported.",
+            "error"
+        );
+        return;
+    }
+
+    const extension =
+        file.type === "image/png"
+            ? "png"
+            : file.type === "image/webp"
+                ? "webp"
+                : "jpg";
+
+    const path =
+        `${authState.user.id}/avatar.${extension}`;
+
+    const { error: uploadError } =
+        await supabaseClient.storage
+            .from("avatars")
+            .upload(path, file, {
+                upsert: true,
+                contentType: file.type,
+                cacheControl: "3600"
+            });
+
+    if (uploadError) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(uploadError),
+            "error"
+        );
+        return;
+    }
+
+    const { data } =
+        supabaseClient.storage
+            .from("avatars")
+            .getPublicUrl(path);
+
+    const avatarUrl =
+        `${data.publicUrl}?v=${Date.now()}`;
+
+    const { data: updatedProfile, error } =
+        await supabaseClient
+            .from("profiles")
+            .update({
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", authState.user.id)
+            .select()
+            .single();
+
+    if (error) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.profile = updatedProfile;
+    renderProfile();
+    setHeaderAuthUI();
+
+    showAuthMessage(
+        "profileMessage",
+        "Profile picture updated.",
+        "success"
+    );
+}
+
+function getFriendlyAuthError(error) {
+    const message =
+        String(error?.message || "Something went wrong.");
+
+    const lower = message.toLowerCase();
+
+    if (lower.includes("invalid login credentials")) {
+        return "Email or password is incorrect.";
+    }
+
+    if (lower.includes("email not confirmed")) {
+        return "Please verify your email before logging in.";
+    }
+
+    if (lower.includes("user already registered")) {
+        return "An account with these details already exists.";
+    }
+
+    if (lower.includes("password")) {
+        return message;
+    }
+
+    if (lower.includes("rate limit") || lower.includes("too many")) {
+        return "Too many attempts. Please wait a little and try again.";
+    }
+
+    return message;
+}
+
+function bindAuthEvents() {
+    authElement("loginForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            loginUser();
+        }
+    );
+
+    authElement("signupForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            signupUser();
+        }
+    );
+
+    authElement("resendEmailBtn")?.addEventListener(
+        "click",
+        resendEmailVerification
+    );
+
+    authElement("emailVerifiedBtn")?.addEventListener(
+        "click",
+        continueAfterEmailVerification
+    );
+
+    authElement("sendPhoneOtpBtn")?.addEventListener(
+        "click",
+        sendPhoneVerificationOtp
+    );
+
+    authElement("verifyPhoneOtpBtn")?.addEventListener(
+        "click",
+        verifyPhoneOtp
+    );
+
+    authElement("emailRecoveryForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            sendEmailRecovery();
+        }
+    );
+
+    authElement("phoneRecoveryForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            sendPhoneRecovery();
+        }
+    );
+
+    authElement("verifyRecoveryOtpBtn")?.addEventListener(
+        "click",
+        verifyPhoneRecoveryOtp
+    );
+
+    authElement("resetPasswordForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            resetPassword();
+        }
+    );
+
+    authElement("logoutBtn")?.addEventListener(
+        "click",
+        logoutUser
+    );
+
+    authElement("profileForm")?.addEventListener(
+        "submit",
+        saveProfile
+    );
+
+    authElement("profileAvatarInput")?.addEventListener(
+        "change",
+        event => {
+            const file = event.target.files?.[0];
+            if (file) uploadAvatar(file);
+        }
+    );
+
+    authElement("signupPassword")?.addEventListener(
+        "input",
+        event => {
+            updatePasswordRequirementUI(event.target.value);
+        }
+    );
+
+    document.querySelectorAll("[data-password-toggle]").forEach(
+        button => {
+            button.addEventListener("click", () => {
+                const target =
+                    authElement(button.dataset.passwordToggle);
+
+                if (!target) return;
+
+                const showing =
+                    target.type === "text";
+
+                target.type =
+                    showing ? "password" : "text";
+
+                button.textContent =
+                    showing ? "Show" : "Hide";
+            });
+        }
+    );
+
+    document.querySelectorAll("[data-recovery]").forEach(
+        button => {
+            button.addEventListener("click", () => {
+                document.querySelectorAll("[data-recovery]")
+                    .forEach(item =>
+                        item.classList.remove("active")
+                    );
+
+                button.classList.add("active");
+
+                const emailForm =
+                    authElement("emailRecoveryForm");
+                const phoneForm =
+                    authElement("phoneRecoveryForm");
+
+                const emailMode =
+                    button.dataset.recovery === "email";
+
+                emailForm?.classList.toggle(
+                    "hidden",
+                    !emailMode
+                );
+
+                phoneForm?.classList.toggle(
+                    "hidden",
+                    emailMode
+                );
+
+                clearAuthMessage("forgotMessage");
+            });
+        }
+    );
+}
+
+function installAuthRouter() {
+    window.addEventListener(
+        "hashchange",
+        () => {
+            routeAuthGuard();
+        }
+    );
+}
+
+async function initializeAuthentication() {
+    if (!authConfigured()) {
+        setAuthHeaderFallback();
+        return;
+    }
+
+    const {
+        data: { session }
+    } = await supabaseClient.auth.getSession();
+
+    authState.session = session;
+    authState.user = session?.user || null;
+
+    if (authState.user) {
+        await loadUserProfile();
+    }
+
+    setHeaderAuthUI();
+
+    supabaseClient.auth.onAuthStateChange(
+        async (event, session) => {
+            authState.session = session;
+            authState.user = session?.user || null;
+
+            if (authState.user) {
+                await loadUserProfile();
+            } else {
+                authState.profile = null;
+            }
+
+            setHeaderAuthUI();
+
+            if (event === "PASSWORD_RECOVERY") {
+                routeTo("reset-password");
+                return;
+            }
+
+            if (
+                event === "SIGNED_IN" &&
+                authState.user &&
+                getRoute() === "login"
+            ) {
+                routeTo("home");
+            }
+        }
+    );
+
+    await routeAuthGuard();
+    authState.initialized = true;
+}
+
+function setAuthHeaderFallback() {
+    const guest = authElement("authGuestActions");
+    const user = authElement("authUserActions");
+
+    guest?.classList.remove("hidden");
+    user?.classList.add("hidden");
+}
+
+/*
+  Run after the existing InterviewPrep application has initialized.
+  This intentionally leaves the original practice logic intact while
+  adding authentication and persistent account state around it.
+*/
+bindAuthEvents();
+installAuthRouter();
+initializeAuthentication();
