@@ -3098,7 +3098,12 @@ const AUTH_ROUTES = new Set([
 ]);
 
 const PROTECTED_ROUTES = new Set([
-    "home",
+    /*
+      "home" removed: first-time visitors should land on the dashboard,
+      not be forced to log in. Login is still required the moment they
+      try to actually start a practice session (pressure/voice) or view
+      account-specific pages (progress/summary/history/profile).
+    */
     "pressure",
     "voice",
     "progress",
@@ -3369,13 +3374,6 @@ async function requireAuthenticatedRoute(route) {
 
     await loadUserProfile();
     setHeaderAuthUI();
-
-    /*
-      The main practice dashboard is available only to authenticated users.
-    */
-    if (route === "home" && !authState.user) {
-        routeTo("login");
-    }
 }
 
 async function routeAuthGuard() {
