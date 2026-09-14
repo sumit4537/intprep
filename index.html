@@ -935,6 +935,22 @@
 
         <section id="loginPage" class="page auth-page">
             <div class="container auth-shell">
+
+                <div class="auth-visual">
+                    <div class="auth-visual-blob blob-1"></div>
+                    <div class="auth-visual-blob blob-2"></div>
+                    <div class="auth-visual-content">
+                        <span class="auth-visual-badge">✓ InterviewPrep</span>
+                        <h2>Practice today.<br>Walk in ready tomorrow.</h2>
+                        <p>Log back in to pick up exactly where you left off — your progress, history and readiness score are all waiting.</p>
+                        <ul class="auth-visual-points">
+                            <li><span class="auth-visual-point-icon">⏱</span> Timed, realistic practice sessions</li>
+                            <li><span class="auth-visual-point-icon">📊</span> Progress tracked across every session</li>
+                            <li><span class="auth-visual-point-icon">🔒</span> Your data, private to your account</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="auth-card">
                     <div class="auth-brand-mark">✓</div>
                     <span class="eyebrow">WELCOME BACK</span>
@@ -944,13 +960,17 @@
                     <div id="loginMessage" class="auth-message hidden" role="alert"></div>
 
                     <form id="loginForm" class="auth-form" novalidate>
-                        <label for="loginEmail">Email address</label>
-                        <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+                        <div class="form-field">
+                            <label for="loginEmail">Email address</label>
+                            <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+                        </div>
 
-                        <label for="loginPassword">Password</label>
-                        <div class="password-field">
-                            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
-                            <button class="password-toggle" type="button" data-password-toggle="loginPassword">Show</button>
+                        <div class="form-field">
+                            <label for="loginPassword">Password</label>
+                            <div class="password-field">
+                                <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                                <button class="password-toggle" type="button" data-password-toggle="loginPassword">Show</button>
+                            </div>
                         </div>
 
                         <div class="auth-row-between">
@@ -976,6 +996,22 @@
 
         <section id="signupPage" class="page auth-page">
             <div class="container auth-shell">
+
+                <div class="auth-visual">
+                    <div class="auth-visual-blob blob-1"></div>
+                    <div class="auth-visual-blob blob-2"></div>
+                    <div class="auth-visual-content">
+                        <span class="auth-visual-badge">✓ InterviewPrep</span>
+                        <h2>One account.<br>Every interview, covered.</h2>
+                        <p>Create your free account to unlock timed practice, a personal readiness score and a full history of every session.</p>
+                        <ul class="auth-visual-points">
+                            <li><span class="auth-visual-point-icon">🎯</span> Questions across every sector and level</li>
+                            <li><span class="auth-visual-point-icon">📈</span> A dashboard built just for you</li>
+                            <li><span class="auth-visual-point-icon">⚡</span> Takes under a minute to set up</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="auth-card auth-card-wide">
                     <div class="auth-brand-mark">✓</div>
                     <span class="eyebrow">CREATE YOUR ACCOUNT</span>
@@ -1034,11 +1070,11 @@
                                 <button class="password-toggle" type="button" data-password-toggle="signupPassword">Show</button>
                             </div>
                             <div class="password-requirements" id="signupPasswordRequirements">
-                                <span data-rule="length">8+ characters</span>
-                                <span data-rule="upper">Uppercase</span>
-                                <span data-rule="lower">Lowercase</span>
-                                <span data-rule="number">Number</span>
-                                <span data-rule="special">Special character</span>
+                                <span data-rule="length"><i class="req-dot"></i>8+ characters</span>
+                                <span data-rule="upper"><i class="req-dot"></i>Uppercase</span>
+                                <span data-rule="lower"><i class="req-dot"></i>Lowercase</span>
+                                <span data-rule="number"><i class="req-dot"></i>Number</span>
+                                <span data-rule="special"><i class="req-dot"></i>Special character</span>
                             </div>
                         </div>
 
@@ -1075,6 +1111,7 @@
                 </div>
             </div>
         </section>
+
 
         <section id="verify-emailPage" class="page auth-page">
             <div class="container auth-shell">

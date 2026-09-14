@@ -3213,10 +3213,12 @@ function setAuthLoading(button, loading, loadingText = "Please wait...") {
         button.dataset.originalText = button.textContent;
         button.textContent = loadingText;
         button.disabled = true;
+        button.classList.add("btn-loading");
     } else {
         button.textContent =
             button.dataset.originalText || button.textContent;
         button.disabled = false;
+        button.classList.remove("btn-loading");
     }
 }
 
@@ -3380,7 +3382,24 @@ async function routeAuthGuard() {
     const route = getRoute();
 
     if (!authConfigured()) {
+        /*
+          Bug fix: previously this returned immediately, which meant that
+          if the Supabase script ever failed to load (slow network,
+          blocked CDN, ad-blocker) the login/signup/profile pages became
+          completely unreachable — hashchange would fire, but nothing
+          would ever switch the visible page. Now we still show the
+          correct page section; only the session-dependent checks below
+          are skipped.
+        */
         setHeaderAuthUI();
+
+        const fallbackPage = document.getElementById(`${route}Page`);
+        if (fallbackPage) {
+            document.querySelectorAll(".page").forEach(page => {
+                page.classList.remove("active-page");
+            });
+            fallbackPage.classList.add("active-page");
+        }
         return;
     }
 
@@ -4480,7 +4499,18 @@ function installAuthRouter() {
 
 async function initializeAuthentication() {
     if (!authConfigured()) {
+        /*
+          Bug fix: previously this returned immediately without ever
+          switching to the requested page section. If someone opened
+          the app directly on a link like #login or #signup (or
+          Supabase's script was still loading / failed to load), the
+          page would silently show the home dashboard instead of the
+          page in the URL. routeAuthGuard() already knows how to fall
+          back gracefully when Supabase isn't configured, so route
+          through it instead of stopping here.
+        */
         setAuthHeaderFallback();
+        await routeAuthGuard();
         return;
     }
 
