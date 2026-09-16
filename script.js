@@ -567,7 +567,12 @@ function navigateTo(route) {
         "voice",
         "progress",
         "summary",
-        "history"
+        "history",
+        "profile",
+        "login",
+        "signup",
+        "verify-email",
+        "reset-password"
     ];
 
     if (!validRoutes.includes(route)) {
@@ -641,7 +646,12 @@ function handleRouteChange() {
         "voice",
         "progress",
         "summary",
-        "history"
+        "history",
+        "profile",
+        "login",
+        "signup",
+        "verify-email",
+        "reset-password"
     ];
 
     if (!validRoutes.includes(route)) {
@@ -2648,28 +2658,79 @@ updateHomeStats();
 
 
 /* =========================================================
-   32. CLEANUP
+   32. SECURITY / LIFECYCLE CLEANUP
 ========================================================= */
 
-window.addEventListener(
-    "beforeunload",
-    () => {
+/*
+   Practice state is intentionally transient.
+   It must never survive a tab close, refresh, BFCache restore,
+   or navigation away from an active interview.
+*/
+function resetTransientPracticeState() {
+    stopTimer();
 
-        stopTimer();
-
-        if (appState.recognition) {
-
-            try {
-                appState.recognition.stop();
-            } catch (error) {
-                console.log(error);
-            }
-
-        }
-
+    if (appState.recognition) {
+        try {
+            appState.recognition.stop();
+        } catch (_) {}
     }
-);
 
+    appState.recognition = null;
+    appState.isListening = false;
+    appState.voiceTranscript = "";
+    appState.currentQuestionIndex = 0;
+    appState.questions = [];
+    appState.sessionAnswers = [];
+    appState.currentRating = 0;
+    appState.remainingSeconds = appState.questionTimeSeconds;
+    appState.timerStartedAt = null;
+    appState.questionStartedAt = null;
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = null;
+    appState.dbSessionMode = null;
+
+    const answer = $("answerInput");
+    if (answer) answer.value = "";
+
+    const progress = $("questionProgress");
+    if (progress) progress.textContent = "Question 1 of 10";
+
+    const timer = $("timerDisplay");
+    if (timer) timer.textContent = "02:00";
+}
+
+function resetPracticeUI() {
+    const setup = $("pressureSetup");
+    const practice = $("pressurePractice");
+
+    if (setup) showElement(setup);
+    if (practice) hideElement(practice);
+
+    const tips = $("tipsPanel");
+    const evaluation = $("evaluationPanel");
+    if (tips) hideElement(tips);
+    if (evaluation) hideElement(evaluation);
+
+    const transcript = $("voiceTranscript");
+    if (transcript) {
+        transcript.textContent = "Your speech transcript will appear here...";
+    }
+}
+
+window.addEventListener("pagehide", () => {
+    resetTransientPracticeState();
+});
+
+window.addEventListener("beforeunload", () => {
+    resetTransientPracticeState();
+});
+
+window.addEventListener("pageshow", event => {
+    if (event.persisted) {
+        resetTransientPracticeState();
+        resetPracticeUI();
+    }
+});
 
 /* =========================================================
    INTERVIEWPREP PHASE 2 — SUPABASE AUTHENTICATION
@@ -2851,6 +2912,7 @@ async function fetchInterviewSessions(limit = 20) {
         .from("interview_sessions")
         .select("id,user_id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,started_at,completed_at,created_at")
         .eq("user_id", authState.user.id)
+        .not("completed_at", "is", null)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -3092,7 +3154,6 @@ const AUTH_ROUTES = new Set([
     "login",
     "signup",
     "verify-email",
-    "verify-phone",
     "forgot-password",
     "reset-password"
 ]);
@@ -3116,7 +3177,6 @@ const PUBLIC_ROUTES = new Set([
     "login",
     "signup",
     "verify-email",
-    "verify-phone",
     "forgot-password",
     "reset-password"
 ]);
@@ -3126,8 +3186,7 @@ const authState = {
     user: null,
     profile: null,
     initialized: false,
-    pendingSignup: null,
-    phoneRecovery: false
+    pendingSignup: null
 };
 
 function authElement(id) {
@@ -3351,7 +3410,7 @@ function isPhoneVerified() {
 }
 
 function isFullyVerified() {
-    return isEmailVerified() && isPhoneVerified();
+    return isEmailVerified();
 }
 
 async function requireAuthenticatedRoute(route) {
@@ -3420,6 +3479,11 @@ async function routeAuthGuard() {
         return;
     }
 
+    if (PROTECTED_ROUTES.has(route) && authState.user && !isEmailVerified()) {
+        routeTo("verify-email");
+        return;
+    }
+
     if (
         route === "login" &&
         authState.user
@@ -3456,10 +3520,6 @@ async function routeAuthGuard() {
 
     if (route === "verify-email") {
         updateEmailVerificationPage();
-    }
-
-    if (route === "verify-phone") {
-        preparePhoneVerificationPage();
     }
 
     if (route === "reset-password") {
@@ -3505,7 +3565,6 @@ async function signupUser() {
         !username ||
         !dateOfBirth ||
         !email ||
-        !phone ||
         !country
     ) {
         showAuthMessage(
@@ -3576,7 +3635,7 @@ async function signupUser() {
                     username,
                     date_of_birth: dateOfBirth,
                     country,
-                    signup_phone: phone,
+                    signup_phone: phone || null,
                     marketing_opt_in: marketing
                 }
             }
@@ -3614,7 +3673,7 @@ async function signupUser() {
         authState.user = data.user;
 
         await createOrUpdateProfileFromSignup();
-        routeTo("verify-phone");
+        routeTo("home");
     } else {
         showAuthMessage(
             "signupMessage",
@@ -3705,11 +3764,6 @@ async function loginUser() {
         return;
     }
 
-    if (!isPhoneVerified()) {
-        routeTo("verify-phone");
-        return;
-    }
-
     routeTo("home");
 }
 
@@ -3786,124 +3840,7 @@ async function continueAfterEmailVerification() {
         return;
     }
 
-    routeTo(
-        isPhoneVerified()
-            ? "home"
-            : "verify-phone"
-    );
-}
-
-async function sendPhoneVerificationOtp() {
-    if (!authConfigured() || !authState.user) {
-        routeTo("login");
-        return;
-    }
-
-    const phone = normalizePhone(
-        authElement("verifyPhoneInput").value
-    );
-
-    if (!phone) {
-        showAuthMessage(
-            "phoneVerifyMessage",
-            "Enter a valid phone number.",
-            "error"
-        );
-        return;
-    }
-
-    const button = authElement("sendPhoneOtpBtn");
-    setAuthLoading(button, true, "Sending code...");
-
-    /*
-      updateUser(phone) starts the phone-change verification flow
-      for an already authenticated user.
-    */
-    const { error } =
-        await supabaseClient.auth.updateUser({
-            phone
-        });
-
-    setAuthLoading(button, false);
-
-    if (error) {
-        showAuthMessage(
-            "phoneVerifyMessage",
-            getFriendlyAuthError(error),
-            "error"
-        );
-        return;
-    }
-
-    showAuthMessage(
-        "phoneVerifyMessage",
-        "Verification code sent. Enter the 6-digit code below.",
-        "success"
-    );
-}
-
-async function verifyPhoneOtp() {
-    if (!authConfigured() || !authState.user) return;
-
-    const phone = normalizePhone(
-        authElement("verifyPhoneInput").value
-    );
-
-    const token =
-        authElement("phoneOtpInput").value.trim();
-
-    if (!phone || !/^\d{6}$/.test(token)) {
-        showAuthMessage(
-            "phoneVerifyMessage",
-            "Enter the 6-digit verification code.",
-            "error"
-        );
-        return;
-    }
-
-    const { error } =
-        await supabaseClient.auth.verifyOtp({
-            phone,
-            token,
-            type: "phone_change"
-        });
-
-    if (error) {
-        showAuthMessage(
-            "phoneVerifyMessage",
-            getFriendlyAuthError(error),
-            "error"
-        );
-        return;
-    }
-
-    const { data } =
-        await supabaseClient.auth.getUser();
-
-    authState.user = data?.user || authState.user;
-
-    await loadUserProfile();
-    setHeaderAuthUI();
-
-    showAuthMessage(
-        "phoneVerifyMessage",
-        "Phone verified successfully. Your InterviewPrep account is now fully verified.",
-        "success"
-    );
-
-    setTimeout(() => routeTo("home"), 900);
-}
-
-function preparePhoneVerificationPage() {
-    const input = authElement("verifyPhoneInput");
-    if (!input) return;
-
-    if (!input.value) {
-        input.value =
-            authState.user?.phone ||
-            authState.pendingSignup?.phone ||
-            "";
-    }
+    routeTo("home");
 }
 
 async function sendEmailRecovery() {
@@ -3943,86 +3880,6 @@ async function sendEmailRecovery() {
         "If an account is associated with that email, a password-reset link has been sent.",
         "success"
     );
-}
-
-async function sendPhoneRecovery() {
-    if (!authConfigGuard()) return;
-
-    const phone =
-        normalizePhone(
-            authElement("recoveryPhone").value
-        );
-
-    if (!phone) {
-        showAuthMessage(
-            "forgotMessage",
-            "Enter your phone number.",
-            "error"
-        );
-        return;
-    }
-
-    const { error } =
-        await supabaseClient.auth.signInWithOtp({
-            phone,
-            options: {
-                shouldCreateUser: false
-            }
-        });
-
-    if (error) {
-        console.warn("Phone recovery request:", error.message);
-    }
-
-    showAuthMessage(
-        "forgotMessage",
-        "If an account is associated with that phone number, a recovery code has been sent.",
-        "success"
-    );
-
-    authState.phoneRecovery = true;
-}
-
-async function verifyPhoneRecoveryOtp() {
-    if (!authConfigured()) return;
-
-    const phone =
-        normalizePhone(
-            authElement("recoveryPhone").value
-        );
-
-    const token =
-        authElement("recoveryOtp").value.trim();
-
-    if (!phone || !/^\d{6}$/.test(token)) {
-        showAuthMessage(
-            "forgotMessage",
-            "Enter the 6-digit recovery code.",
-            "error"
-        );
-        return;
-    }
-
-    const { data, error } =
-        await supabaseClient.auth.verifyOtp({
-            phone,
-            token,
-            type: "sms"
-        });
-
-    if (error) {
-        showAuthMessage(
-            "forgotMessage",
-            getFriendlyAuthError(error),
-            "error"
-        );
-        return;
-    }
-
-    authState.session = data.session;
-    authState.user = data.user;
-
-    routeTo("reset-password");
 }
 
 function updateResetPasswordRoute() {
@@ -4158,9 +4015,9 @@ function renderProfile() {
                 ? "Verified"
                 : "Not verified",
         profilePhoneStatus:
-            isPhoneVerified()
-                ? "Verified"
-                : "Not verified"
+            user.phone
+                ? "Provided (verification optional)"
+                : "Not provided"
     };
 
     Object.entries(mappings).forEach(([id, value]) => {
@@ -4370,35 +4227,12 @@ function bindAuthEvents() {
         continueAfterEmailVerification
     );
 
-    authElement("sendPhoneOtpBtn")?.addEventListener(
-        "click",
-        sendPhoneVerificationOtp
-    );
-
-    authElement("verifyPhoneOtpBtn")?.addEventListener(
-        "click",
-        verifyPhoneOtp
-    );
-
     authElement("emailRecoveryForm")?.addEventListener(
         "submit",
         event => {
             event.preventDefault();
             sendEmailRecovery();
         }
-    );
-
-    authElement("phoneRecoveryForm")?.addEventListener(
-        "submit",
-        event => {
-            event.preventDefault();
-            sendPhoneRecovery();
-        }
-    );
-
-    authElement("verifyRecoveryOtpBtn")?.addEventListener(
-        "click",
-        verifyPhoneRecoveryOtp
     );
 
     authElement("resetPasswordForm")?.addEventListener(
@@ -4454,38 +4288,7 @@ function bindAuthEvents() {
         }
     );
 
-    document.querySelectorAll("[data-recovery]").forEach(
-        button => {
-            button.addEventListener("click", () => {
-                document.querySelectorAll("[data-recovery]")
-                    .forEach(item =>
-                        item.classList.remove("active")
-                    );
 
-                button.classList.add("active");
-
-                const emailForm =
-                    authElement("emailRecoveryForm");
-                const phoneForm =
-                    authElement("phoneRecoveryForm");
-
-                const emailMode =
-                    button.dataset.recovery === "email";
-
-                emailForm?.classList.toggle(
-                    "hidden",
-                    !emailMode
-                );
-
-                phoneForm?.classList.toggle(
-                    "hidden",
-                    emailMode
-                );
-
-                clearAuthMessage("forgotMessage");
-            });
-        }
-    );
 }
 
 function installAuthRouter() {

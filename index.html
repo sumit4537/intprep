@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https://*.supabase.co; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 
     <title>InterviewPrep | AI-Powered Interview Practice</title>
 
@@ -12,7 +14,7 @@
     >
 
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 </head>
 
 <body>
@@ -119,7 +121,6 @@
                             <div
                                 class="progress-fill"
                                 id="homeProgressBar"
-                                style="width: 0%"
                             ></div>
                         </div>
 
@@ -1048,8 +1049,8 @@
                         </div>
 
                         <div class="form-field">
-                            <label for="signupPhone">Phone number</label>
-                            <input id="signupPhone" type="tel" autocomplete="tel" placeholder="+91 9876543210" required>
+                            <label for="signupPhone">Phone number <small>(optional)</small></label>
+                            <input id="signupPhone" type="tel" autocomplete="tel" placeholder="+91 9876543210">
                         </div>
 
                         <div class="form-field">
@@ -1138,39 +1139,6 @@
             </div>
         </section>
 
-        <section id="verify-phonePage" class="page auth-page">
-            <div class="container auth-shell">
-                <div class="auth-card verification-card">
-                    <div class="verification-icon">📱</div>
-                    <span class="eyebrow">PHONE VERIFICATION</span>
-                    <h1>Verify your phone</h1>
-                    <p class="auth-subtitle">
-                        Verify your phone number with a one-time code before using the account as a fully verified user.
-                    </p>
-
-                    <div id="phoneVerifyMessage" class="auth-message hidden" role="alert"></div>
-
-                    <form id="phoneVerifyForm" class="auth-form" novalidate>
-                        <label for="verifyPhoneInput">Phone number</label>
-                        <input id="verifyPhoneInput" type="tel" autocomplete="tel" required>
-
-                        <button class="btn btn-primary btn-block" id="sendPhoneOtpBtn" type="button">
-                            Send verification code
-                        </button>
-
-                        <label for="phoneOtpInput">6-digit verification code</label>
-                        <input id="phoneOtpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
-
-                        <button class="btn btn-secondary btn-block" id="verifyPhoneOtpBtn" type="button">
-                            Verify phone
-                        </button>
-                    </form>
-
-                    <a class="auth-back-link" href="#home">Skip for now</a>
-                </div>
-            </div>
-        </section>
-
         <section id="forgot-passwordPage" class="page auth-page">
             <div class="container auth-shell">
                 <div class="auth-card">
@@ -1181,7 +1149,6 @@
 
                     <div class="recovery-tabs" role="tablist">
                         <button class="recovery-tab active" type="button" data-recovery="email">Email</button>
-                        <button class="recovery-tab" type="button" data-recovery="phone">Phone</button>
                     </div>
 
                     <div id="forgotMessage" class="auth-message hidden" role="status"></div>
@@ -1190,16 +1157,6 @@
                         <label for="recoveryEmail">Email address</label>
                         <input id="recoveryEmail" type="email" autocomplete="email" required>
                         <button class="btn btn-primary btn-block" type="submit">Send reset link</button>
-                    </form>
-
-                    <form id="phoneRecoveryForm" class="auth-form hidden" novalidate>
-                        <label for="recoveryPhone">Phone number</label>
-                        <input id="recoveryPhone" type="tel" autocomplete="tel" placeholder="+91 9876543210" required>
-                        <button class="btn btn-primary btn-block" type="submit">Send recovery code</button>
-
-                        <label for="recoveryOtp">6-digit code</label>
-                        <input id="recoveryOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
-                        <button class="btn btn-secondary btn-block" type="button" id="verifyRecoveryOtpBtn">Verify code</button>
                     </form>
 
                     <a class="auth-back-link" href="#login">Back to login</a>
